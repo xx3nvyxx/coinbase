@@ -26,7 +26,7 @@ def add_transaction(tx):
     order = auth_client.get_order(tx["id"])
     price = float(order["executed_value"]) / float(order["filled_size"])
     created = mktime(datetime.strptime(order["created_at"],"%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
-    print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + price)
+    print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
     db.Orders.insert(txid=order["id"], price=price,
             amount=order["filled_size"],
             created=created,
