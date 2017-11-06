@@ -35,7 +35,12 @@ def add_transaction(tx):
 def update_transactions():
     for tx in db.Orders.select().where(db.Orders.status != "done"):
         order = auth_client.get_order(tx.txid)
-        db.Orders.update(status == order.get("status", "done")).where(db.Orders.txid == tx.txid)
+        price = float(order["executed_value"]) / float(order["filled_size"])
+        created = mktime(datetime.strptime(order["created_at"],"%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+        db.Orders.update(price=price,
+                amount=order["filled_size"],
+                created=created,
+                status=order["status"]).where(db.Orders.txid == tx.txid).execute()
 
 def latest_tx():
     try:
