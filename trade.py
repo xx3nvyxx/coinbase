@@ -21,16 +21,17 @@ def main():
         else:
             print( "Error filling wallet. Check if funds are available in Coinbase account.")
         update_transactions()
+    send_coins()
 
 def add_transaction(tx):
     order = auth_client.get_order(tx["id"])
     price = float(order["executed_value"]) / float(order["filled_size"])
     created = mktime(datetime.strptime(order["created_at"],"%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
-    print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
     db.Orders.insert(txid=order["id"], price=price,
             amount=order["filled_size"],
             created=created,
             status=order["status"]).execute()
+    print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
 
 def update_transactions():
     for tx in db.Orders.select().where(db.Orders.status != "done"):
@@ -74,6 +75,11 @@ def order_coins():
         if (buy["id"] is not None):
             add_transaction(buy)
 
+def send_coins():
+    for a in ga:
+        if (a.get("currency") == "BTC" and float(a["available"]) > 0):
+            auth_client.crypto_withdraw(a["available"], "BTC", config.dest)
+            print(a["available"] + " BTC sent to " + str(config.dest))
 
 if __name__=="__main__":
     main()
