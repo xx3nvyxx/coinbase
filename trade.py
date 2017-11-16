@@ -9,19 +9,28 @@ import config, db
 auth_client = gdax.AuthenticatedClient(config.g_key, config.g_secret,
         config.g_passphrase)
 
-ga = auth_client.get_accounts()
+try:
+    ga = auth_client.get_accounts()
+except ValueError as err:
+    print('ValueError: ', err)
+    quit()
 if (type(ga) is not list):
     raise Exception(ga["message"])
 
 def main():
-    update_transactions()
-    if ((datetime.utcnow() - latest_tx()).total_seconds() > config.interval):
-        if (fill_wallet()):
-            order_coins()
-        else:
-            print( "Error filling wallet. Check if funds are available in Coinbase account.")
+    try:
         update_transactions()
-    send_coins()
+        if ((datetime.utcnow() - latest_tx()).total_seconds() > config.interval):
+            if (fill_wallet()):
+                order_coins()
+            else:
+                print( "Error filling wallet. Check if funds are available in Coinbase account.")
+                quit()
+            update_transactions()
+        send_coins()
+    except ValueError as err:
+        print('ValueError: ', err)
+        quit()
 
 def add_transaction(tx):
     order = auth_client.get_order(tx["id"])
@@ -77,7 +86,7 @@ def order_coins():
 
 def send_coins():
     for a in ga:
-        if (a.get("currency") == "BTC" and float(a["available"]) > 0):
+        if (a.get("currency") == "BTC" and float(a["available"]) > 0.00005460):
             auth_client.crypto_withdraw(a["available"], "BTC", config.dest)
             print(a["available"] + " BTC sent to " + str(config.dest))
 
