@@ -15,7 +15,8 @@ except ValueError as err:
     print('ValueError: ', err)
     quit()
 if (type(ga) is not list):
-    raise Exception(ga["message"])
+    Print('API Error: ', ga["message"])
+    quit()
 
 def main():
     try:
