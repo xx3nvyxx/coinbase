@@ -15,13 +15,14 @@ except ValueError as err:
     print('ValueError: ', err)
     quit()
 if (type(ga) is not list):
-    Print('API Error: ', ga["message"])
+    print('API Error: ', ga["message"])
     quit()
 
 def main():
     try:
         update_transactions()
-        if ((datetime.utcnow() - latest_tx()).total_seconds() > config.interval):
+        tx = latest_tx()
+        if ((datetime.utcnow() - tx['created']).total_seconds() > config.interval):
             if (fill_wallet()):
                 order_coins()
             else:
@@ -54,11 +55,16 @@ def update_transactions():
                 status=order["status"]).where(db.Orders.txid == tx.txid).execute()
 
 def latest_tx():
+    ret = dict()
     try:
-        created = db.Orders.select().order_by(db.Orders.created.desc()).get().created
-        return datetime.utcfromtimestamp(created)
+        tx = db.Orders.select().order_by(db.Orders.created.desc()).get()
+        ret['created'] = datetime.utcfromtimestamp(tx.created)
+        ret['price'] = tx.price
+        return ret
     except DoesNotExist:
-        return datetime.utcfromtimestamp(0)
+        ret['created'] = datetime.utcfromtimestamp(0)
+        ret['price'] = float('Inf')
+        return ret
 
 def fill_wallet():
     for a in ga:
