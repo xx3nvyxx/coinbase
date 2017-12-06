@@ -3,8 +3,12 @@ from __future__ import print_function
 from datetime import datetime
 from time import mktime
 from peewee import *
+import sys
 import gdax
 import config, db
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 auth_client = gdax.AuthenticatedClient(config.g_key, config.g_secret,
         config.g_passphrase)
@@ -12,10 +16,10 @@ auth_client = gdax.AuthenticatedClient(config.g_key, config.g_secret,
 try:
     ga = auth_client.get_accounts()
 except ValueError as err:
-    print('ValueError: ', err)
+    eprint('ValueError: ', err)
     quit()
 if (type(ga) is not list):
-    print('API Error: ', ga["message"])
+    eprint('API Error: ', ga["message"])
     quit()
 
 def main():
@@ -26,33 +30,48 @@ def main():
             if (fill_wallet()):
                 order_coins()
             else:
-                print( "Error filling wallet. Check if funds are available in Coinbase account.")
+                eprint( "Error filling wallet. Check if funds are available in Coinbase account.")
                 quit()
             update_transactions()
         send_coins()
     except ValueError as err:
-        print('ValueError: ', err)
+        eprint('ValueError: ', err)
+        quit()
+    except KeyError as err:
+        eprint('KeyError: ', err)
         quit()
 
 def add_transaction(tx):
     order = auth_client.get_order(tx["id"])
-    price = float(order["executed_value"]) / float(order["filled_size"])
+    if (order["type"] == "limit"):
+        price = order["price"]
+    else:
+        price = float(order["executed_value"]) / float(order["filled_size"])
     created = mktime(datetime.strptime(order["created_at"],"%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
     db.Orders.insert(txid=order["id"], price=price,
             amount=order["filled_size"],
             created=created,
             status=order["status"]).execute()
-    print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
+    if (order["type"] == "limit"):
+        print(order["created_at"] + " - " + order["size"] + "BTC ordered at " + str(price))
+    else:
+        print(order["created_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
 
 def update_transactions():
     for tx in db.Orders.select().where(db.Orders.status != "done"):
         order = auth_client.get_order(tx.txid)
-        price = float(order["executed_value"]) / float(order["filled_size"])
+        if (order["type"] == "limit"):
+            price = order["price"]
+        else:
+            price = float(order["executed_value"]) / float(order["filled_size"])
         created = mktime(datetime.strptime(order["created_at"],"%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
         db.Orders.update(price=price,
                 amount=order["filled_size"],
                 created=created,
                 status=order["status"]).where(db.Orders.txid == tx.txid).execute()
+        if (order["status"] == 'done'):
+            print(order["done_at"] + " - " + order["filled_size"] + "BTC bought at " + str(price))
+
 
 def latest_tx():
     ret = dict()
@@ -86,8 +105,13 @@ def order_coins():
     if (low < 1):
         return 0
     current = float(auth_client.get_product_ticker(product_id="BTC-USD")["ask"])
-    if ((low * 1.01) >= current):
-        buy = auth_client.buy(type="market", funds="{:.2f}".format(config.amount), product_id="BTC-USD")
+    if (current < 9995):
+        if ((low * 1.01) >= current):
+            buy = auth_client.buy(type="market", funds="{:.2f}".format(config.amount), product_id="BTC-USD")
+            if (buy["id"] is not None):
+                add_transaction(buy)
+    else:
+        buy = auth_client.buy(type="limit", price=str(low), size='0.0001', product_id="BTC-USD", post_only=True)
         if (buy["id"] is not None):
             add_transaction(buy)
 
